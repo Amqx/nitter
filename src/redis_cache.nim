@@ -55,8 +55,11 @@ proc initRedisPool*(cfg: Config) {.async.} =
     await migrate("verifiedType", "p:*")
 
     pool.withAcquire(r):
-      # optimize memory usage for user ID buckets
-      await r.configSet("hash-max-ziplist-entries", "1000")
+      try:
+        await r.configSet("hash-max-ziplist-entries", "1000")
+      except ReplyError, RedisError:
+        stdout.write "Redis refused CONFIG SET, continuing without it.\n"
+        stdout.flushFile
 
   except OSError:
     stdout.write "Failed to connect to Redis.\n"

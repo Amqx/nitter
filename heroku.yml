@@ -1,0 +1,7 @@
+# Heroku container-stack build. Requires `heroku stack:set container`.
+build:
+    docker:
+        web: Dockerfile
+
+run:
+    web: ./docker-entrypoint.sh ./nitter
