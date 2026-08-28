@@ -80,8 +80,53 @@ The full list is in `docker-entrypoint.sh`; the ones most worth knowing:
 | `NITTER_REDIS_CONNECTIONS` | `4` | Raise only if your plan allows more than 20 connections |
 | `NITTER_REDIS_MAX_CONNECTIONS` | `8` | Must stay under the plan's connection cap |
 | `NITTER_STATIC_DIR` | `./public` | Widened to world-readable at boot; see Jester note below |
+| `NITTER_ORIGIN_KEY` | unset | Locks the origin to a reverse proxy; see below. Unset disables the check |
 | `NITTER_ENABLE_DEBUG` | `false` | Turning this on exposes `/.sessions` |
 | `NITTER_THEME` | `Nitter` | |
+
+## Locking the origin to Cloudflare
+
+Putting Cloudflare (Access, a WAF rule, anything) in front of the app only
+protects the hostname that resolves to Cloudflare. `your-nitter-app.herokuapp.com`
+still answers to anyone who learns it, and Heroku offers no way to firewall the
+router by IP. `NITTER_ORIGIN_KEY` closes that: nitter serves a request only when
+it carries `X-Nitter-Origin-Key` matching the configured value, and returns a
+bare `403 Forbidden` otherwise.
+
+```
+browser -> Cloudflare (your policy) -> + X-Nitter-Origin-Key -> Heroku -> nitter
+whoever found the herokuapp.com name -------- no header ----------------> 403
+```
+
+Pick a secret and set it on the app:
+
+```sh
+heroku config:set -a your-nitter-app NITTER_ORIGIN_KEY="$(openssl rand -hex 32)"
+```
+
+Then have Cloudflare attach it to everything it proxies: **Rules → Transform
+Rules → Modify Request Header → Create rule**, applying to all incoming
+requests, with one *Set static* action — header `X-Nitter-Origin-Key`, value the
+same secret.
+
+The check is the first thing in nitter's `before` block, above even the
+malformed-path check, so an unauthorised caller gets a uniform 403 and cannot
+tell routes apart by status code. Its position also matters for static files:
+Jester only falls through to its static-file handler when no route matched
+(`handleRequestSlow`), and `halt` marks the request matched, so this one line
+covers `public/` too. Anything placed after the `cond` line would not.
+
+This locks you out of the herokuapp.com hostname as well, including for
+debugging. Present the header to get back in:
+
+```sh
+curl -H "X-Nitter-Origin-Key: $(heroku config:get NITTER_ORIGIN_KEY -a your-nitter-app)" \
+  https://your-nitter-app.herokuapp.com/about
+```
+
+Rotating the secret means updating the config var and the Cloudflare rule; the
+app rejects everything in between, so change the rule first, or accept a few
+seconds of 403s.
 
 ## Deploy
 
@@ -159,6 +204,13 @@ To exercise the rendering logic:
 
 ```sh
 sh tests/test_entrypoint.sh
+```
+
+To exercise the origin lock against a running instance, start it with a
+non-empty `originKey` and point the tests at the same value:
+
+```sh
+NITTER_ORIGIN_KEY=testkey pytest tests/test_origin_lock.py
 ```
 
 To test the whole image against a TLS Redis without deploying, run a local

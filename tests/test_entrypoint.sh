@@ -81,6 +81,7 @@ check "stunnel accepts on loopback"   "$WORK/stunnel.conf" 'accept = 127.0.0.1:6
 check "stunnel is a TLS client"       "$WORK/stunnel.conf" 'client = yes'
 check "self-signed cert accepted"     "$WORK/stunnel.conf" 'verifyChain = no'
 check "sessions decoded"              "$WORK/sessions.jsonl" 'oauth_token'
+check "origin lock off by default"    "$WORK/nitter.conf" 'originKey = ""'
 
 echo "== a plaintext redis:// URL skips stunnel entirely =="
 rm -f "$WORK/stunnel.conf"
@@ -113,6 +114,14 @@ run REDIS_URL="rediss://someuser:secret@host.example.com:6380" \
     NITTER_SESSIONS_B64="$SESSIONS_B64"
 check_status "user:pass run succeeds" 0 $?
 check "password without the username" "$WORK/nitter.conf" 'redisPassword = "secret"'
+
+echo "== NITTER_ORIGIN_KEY locks the origin to a trusted reverse proxy =="
+run REDIS_URL="rediss://:pw@host:6380" \
+    $BASE_ENV_HMAC \
+    NITTER_SESSIONS_B64="$SESSIONS_B64" \
+    NITTER_ORIGIN_KEY=cf-shared-secret
+check_status "origin key run succeeds" 0 $?
+check "origin key reaches the config" "$WORK/nitter.conf" 'originKey = "cf-shared-secret"'
 
 echo "== misconfiguration fails loudly instead of booting insecure =="
 run REDIS_URL="rediss://:pw@host:6380" NITTER_SESSIONS_B64="$SESSIONS_B64"

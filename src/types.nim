@@ -427,6 +427,7 @@ type
     staticDir*: string
 
     hmacKey*: string
+    originKey*: string
     base64Media*: bool
     minTokens*: int
     enableRSSUserTweets*: bool

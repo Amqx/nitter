@@ -6,6 +6,18 @@ import ../views/general
 import ".."/[utils, prefs, types]
 export utils, prefs, types, uri, json
 
+const originKeyHeader* = "X-Nitter-Origin-Key"
+
+template requireOriginKey*() {.dirty.} =
+  ## Rejects any request that did not arrive through the reverse proxy holding
+  ## `originKey`, so the origin cannot be reached directly (on Heroku, over its
+  ## *.herokuapp.com hostname) bypassing whatever the proxy enforces.
+  if cfg.originKey.len > 0:
+    let givenOriginKey: string =
+      request.getNativeReq.headers.getOrDefault(originKeyHeader)
+    if not constantTimeEq(cfg.originKey, givenOriginKey):
+      halt Http403, {"Content-Type": "text/plain;charset=utf-8"}, "Forbidden\n"
+
 template savePref*(pref, value: string; req: Request; expire=false) =
   if not expire or pref in cookies(req):
     let sameSite = if cfg.useHttps: None else: Lax

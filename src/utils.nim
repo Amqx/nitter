@@ -28,6 +28,13 @@ proc setHmacKey*(key: string) =
 proc setProxyEncoding*(state: bool) =
   base64Media = state
 
+proc constantTimeEq*(a, b: string): bool =
+  if a.len != b.len: return false
+  var diff = 0'u8
+  for i in 0 ..< a.len:
+    diff = diff or (a[i].uint8 xor b[i].uint8)
+  result = diff == 0
+
 proc getHmac*(data: string): string =
   ($hmac(sha256, hmacKey, data))[0 .. 12]
 

@@ -115,6 +115,7 @@ redisMaxConnections = ${NITTER_REDIS_MAX_CONNECTIONS:-8}
 
 [Config]
 hmacKey = "${NITTER_HMAC_KEY}"
+originKey = "${NITTER_ORIGIN_KEY:-}"
 base64Media = ${NITTER_BASE64_MEDIA:-false}
 enableRSS = ${NITTER_ENABLE_RSS:-true}
 enableRSSUserTweets = true

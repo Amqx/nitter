@@ -77,6 +77,9 @@ settings:
 
 routes:
   before:
+    # Reject anything that did not come through the trusted reverse proxy.
+    requireOriginKey()
+
     # Reject malformed paths
     if request.path.len == 0 or request.path[0] != '/':
       halt Http400
