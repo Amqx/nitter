@@ -1,0 +1,16 @@
+[project]
+name = "tools"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Amqx", email = "157001598+Amqx@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "cloudscraper>=1.2.71",
+    "curl-cffi>=0.16.2",
+    "pyotp>=2.10.0",
+    "requests>=2.34.2",
+    "zendriver>=0.15.0",
+]

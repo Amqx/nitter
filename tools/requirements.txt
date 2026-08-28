@@ -1,3 +1,0 @@
-zendriver>=0.15.0
-pyotp
-curl_cffi
