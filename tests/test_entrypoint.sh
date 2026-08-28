@@ -130,6 +130,41 @@ check "sessions error names the var" "$WORK/stderr" 'NITTER_SESSIONS_B64'
 run REDIS_URL="http://host:6380" $BASE_ENV_HMAC NITTER_SESSIONS_B64="$SESSIONS_B64"
 check_status "bad scheme exits 1" 1 $?
 
+echo "== static assets are made world-readable for Jester =="
+# Heroku chowns the image to an arbitrary UID with umask 0077, leaving
+# public/ at 600/700. Jester 0.6.0 returns 403 for any static file without
+# the o+r bit, which shows up as a completely unstyled site.
+STATIC="$WORK/public"
+mkdir -p "$STATIC/css/themes"
+echo "body{}" > "$STATIC/css/style.css"
+echo "body{}" > "$STATIC/css/themes/nitter.css"
+printf 'x' > "$STATIC/logo.png"
+chmod -R go-rwx "$STATIC"
+
+run REDIS_URL="rediss://:pw@host:6380" \
+    $BASE_ENV_HMAC \
+    NITTER_SESSIONS_B64="$SESSIONS_B64" \
+    NITTER_STATIC_DIR="$STATIC"
+check_status "static-perms run succeeds" 0 $?
+
+for f in css/style.css css/themes/nitter.css logo.png; do
+  mode=$(stat -c '%a' "$STATIC/$f")
+  case "$mode" in
+    *[4567]) pass=$((pass + 1)) ;;
+    *) fail=$((fail + 1)); echo "FAIL: $f is $mode, not world-readable" ;;
+  esac
+done
+
+for d in . css css/themes; do
+  mode=$(stat -c '%a' "$STATIC/$d")
+  case "$mode" in
+    *[5711]) pass=$((pass + 1)) ;;
+    *) fail=$((fail + 1)); echo "FAIL: dir $d is $mode, not world-traversable" ;;
+  esac
+done
+
+check "staticDir points at the configured dir" "$WORK/nitter.conf" "staticDir = \"$STATIC\""
+
 echo "== no REDIS_URL means the compose path is untouched =="
 rm -f "$WORK/nitter.conf"
 env -i PATH="$PATH" NITTER_CONF_FILE="$WORK/nitter.conf" sh "$ENTRYPOINT" /bin/true

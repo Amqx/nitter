@@ -17,6 +17,7 @@ set -eu
 CONF_FILE="${NITTER_CONF_FILE:-/tmp/nitter.conf}"
 SESSIONS_FILE="${NITTER_SESSIONS_FILE:-/tmp/sessions.jsonl}"
 STUNNEL_CONF="${STUNNEL_CONF:-/tmp/stunnel.conf}"
+STATIC_DIR="${NITTER_STATIC_DIR:-./public}"
 
 die() {
   echo "entrypoint: $1" >&2
@@ -99,7 +100,7 @@ address = "0.0.0.0"
 port = ${PORT:-8080}
 https = ${NITTER_HTTPS:-true}
 httpMaxConnections = ${NITTER_HTTP_MAX_CONNECTIONS:-100}
-staticDir = "./public"
+staticDir = "${STATIC_DIR}"
 
 [Cache]
 listMinutes = ${NITTER_LIST_MINUTES:-240}
@@ -160,6 +161,21 @@ Without account sessions every request to the API fails."
   chmod 600 "$SESSIONS_FILE"
 }
 
+# Heroku chowns the image to an arbitrary UID and applies a 0077 umask, which
+# leaves public/ at 600/700. Jester 0.6.0 (jester.nim:188) returns 403 for any
+# static file without the o+r bit, so every stylesheet, script and icon fails
+# to load and the site renders completely unstyled. The dyno user owns these
+# files, so it can widen them back at boot.
+fix_static_permissions() {
+  [ -d "$STATIC_DIR" ] || return 0
+
+  if chmod -R a+rX "$STATIC_DIR" 2>/dev/null; then
+    return 0
+  fi
+
+  echo "entrypoint: could not widen permissions on $STATIC_DIR" >&2
+}
+
 wait_for_stunnel() {
   i=0
   while [ "$i" -lt 50 ]; do
@@ -202,6 +218,7 @@ fi
 
 write_nitter_conf
 write_sessions_file
+fix_static_permissions
 if [ "$REDIS_SCHEME" = "rediss" ]; then
   write_stunnel_conf
 fi

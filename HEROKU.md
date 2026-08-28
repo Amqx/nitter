@@ -79,6 +79,7 @@ The full list is in `docker-entrypoint.sh`; the ones most worth knowing:
 | `NITTER_HTTPS` | `true` | Correct on Heroku — the router terminates TLS, but public URLs are https |
 | `NITTER_REDIS_CONNECTIONS` | `4` | Raise only if your plan allows more than 20 connections |
 | `NITTER_REDIS_MAX_CONNECTIONS` | `8` | Must stay under the plan's connection cap |
+| `NITTER_STATIC_DIR` | `./public` | Widened to world-readable at boot; see Jester note below |
 | `NITTER_ENABLE_DEBUG` | `false` | Turning this on exposes `/.sessions` |
 | `NITTER_THEME` | `Nitter` | |
 
@@ -111,6 +112,29 @@ OSError` handler in `src/redis_cache.nim` and killed the process, so the call
 is now wrapped and treated as best-effort. You will see `Redis refused CONFIG
 SET, continuing without it.` in the logs — that is expected, and only means
 user-ID buckets use slightly more memory.
+
+**Static assets and Jester's permission check.** Heroku does not run the
+container as the `USER` in the `Dockerfile`. It chowns the image to an
+arbitrary UID and applies a `0077` umask, which leaves `public/` at `600`
+files and `700` directories:
+
+```
+uid=12488(u12488) gid=12488(dyno)   umask 0077
+drwx------  /src/public
+-rw-------  /src/public/css/style.css
+```
+
+Nitter can still read those files, but Jester 0.6.0 refuses to serve any
+static file that is not world-readable (`jester.nim:188` returns `Http403`
+when `fpOthersRead` is missing). The result is a site that returns 200 for
+every page while every stylesheet, script and icon returns 403 — it renders
+completely unstyled. The entrypoint runs `chmod -R a+rX` over the static
+directory at boot to undo this; the dyno user owns the files, so it is allowed
+to. Capital `X` adds the traversal bit to directories without making regular
+files executable.
+
+Set `NITTER_STATIC_DIR` if you move the static directory; it feeds both the
+`chmod` and the rendered `staticDir`.
 
 **stunnel is not supervised.** It is started as a daemon before nitter execs.
 If stunnel dies, nitter stays up but loses Redis, and Heroku will not restart
