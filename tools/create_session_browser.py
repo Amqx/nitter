@@ -5,6 +5,7 @@ Requirements:
 
 Usage:
   python3 tools/create_session_browser.py <username> <password> [totp_seed] [--append sessions.jsonl] [--headless]
+  browser_executable_path=/path/to/browser python3 tools/create_session_browser.py ...
 
 Examples:
   # Output to terminal
@@ -251,6 +252,7 @@ async def login_and_get_session(username, password, totp_seed=None, headless=Fal
         headless=headless,
         user_data_dir=profile,
         browser_args=_BROWSER_ARGS,
+        browser_executable_path=os.environ.get("browser_executable_path"),
     )
     try:
         # --- Navigate to login ---
