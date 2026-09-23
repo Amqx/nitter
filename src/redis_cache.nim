@@ -92,7 +92,7 @@ proc cache*(data: PhotoRail; name: string) {.async.} =
   await setEx("pr2:" & toLower(name), baseCacheTime * 2, compress(toFlatty(data)))
 
 proc cache*(data: User) {.async.} =
-  if data.username.len == 0: return
+  if data.username.len == 0 or data.id.len == 0: return
   let name = toLower(data.username)
   await cacheUserId(name, data.id)
   pool.withAcquire(r):
@@ -119,21 +119,28 @@ template deserialize(data, T) =
 
 proc getUserId*(username: string): Future[string] {.async.} =
   let name = toLower(username)
+  var cachedId: string
   pool.withAcquire(r):
-    result = await r.hGet(name.uidKey, name)
-    if result == redisNil:
-      let user = await getGraphUser(username)
-      if user.suspended:
-        return "suspended"
-      else:
-        await all(cacheUserId(name, user.id), cache(user))
-        return user.id
+    cachedId = await r.hGet(name.uidKey, name)
+
+  if cachedId.len > 0 and cachedId != redisNil:
+    return cachedId
+
+  let user = await getGraphUser(username)
+  if user.suspended:
+    return "suspended"
+
+  if user.id.len > 0:
+    await cache(user)
+    if name != toLower(user.username):
+      await cacheUserId(name, user.id)
+  return user.id
 
 proc getCachedUser*(username: string; fetch=true): Future[User] {.async.} =
   let prof = await get("p:" & toLower(username))
   if prof != redisNil:
     prof.deserialize(User)
-  elif fetch:
+  if result.id.len == 0 and fetch:
     result = await getGraphUser(username)
     await cache(result)
 

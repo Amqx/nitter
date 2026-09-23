@@ -63,6 +63,11 @@ proc getGraphUser*(username: string): Future[User] {.async.} =
   if username.len == 0: return
   let js = await fetchRaw(userUrl(username))
   result = parseGraphUser(js)
+  if not result.suspended and (result.id.len == 0 or result.username.len == 0):
+    # The older cookie query can return a successful response without usable
+    # user data. Try the newer screen-name query before reporting a 404.
+    let variables = $(%*{"screen_name": username})
+    result = parseGraphUser(await fetchRaw(apiReq(graphUserV2, variables)))
 
 proc getGraphUserById*(id: string): Future[User] {.async.} =
   if id.len == 0 or id.any(c => not c.isDigit): return
